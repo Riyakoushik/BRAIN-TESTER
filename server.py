@@ -6,6 +6,7 @@ Run with:
   # or: uvicorn server:app --host 0.0.0.0 --port 8000
 """
 import os
+import time
 import threading
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -14,11 +15,13 @@ from chat import ChatSystem
 from config import config
 import uvicorn
 
+_LEARN_CACHE_TTL = 600  # 10 minutes
+
 app = FastAPI(title="Living Memory AI", version="2.0")
 
 # Global state
 chat_system: Optional[ChatSystem] = None
-_learn_cache: dict = {}  # cache learn responses by message hash
+_learn_cache: dict = {}  # cache learn responses: {message: (timestamp, responses)}
 
 
 @app.on_event("startup")
@@ -83,8 +86,14 @@ def learn(req: ChatRequest):
 
     responses = chat_system.generate_response(req.message, num_return_sequences=3)
 
-    # Cache for later selection
-    _learn_cache[req.message] = responses
+    # Cache for later selection (with TTL)
+    _learn_cache[req.message] = (time.monotonic(), responses)
+
+    # Evict expired entries
+    now = time.monotonic()
+    expired = [k for k, (ts, _) in _learn_cache.items() if now - ts > _LEARN_CACHE_TTL]
+    for k in expired:
+        _learn_cache.pop(k, None)
 
     return LearnResponse(options=responses)
 
@@ -99,7 +108,7 @@ def learn_select(req: LearnSelectRequest):
 
     # Use cached responses if available, otherwise regenerate
     if req.message in _learn_cache:
-        responses = _learn_cache.pop(req.message)
+        _, responses = _learn_cache.pop(req.message)
     else:
         responses = chat_system.generate_response(req.message, num_return_sequences=3)
 
@@ -134,6 +143,8 @@ def trigger_evolve():
 @app.get("/memories", response_model=MemoryResponse)
 def get_memories():
     """Retrieve all stored memories."""
+    if not chat_system:
+        raise HTTPException(status_code=503, detail="Model not loaded yet")
     store = chat_system.orchestrator.store
     all_mems = store.collection.get()
     docs = all_mems.get("documents", [])
@@ -141,4 +152,4 @@ def get_memories():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=config.server_host, port=config.server_port)

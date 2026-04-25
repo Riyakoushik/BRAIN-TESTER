@@ -1,3 +1,4 @@
+import threading
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
@@ -9,6 +10,7 @@ import os
 
 class ChatSystem:
     def __init__(self, model_path=config.checkpoint_dir):
+        self._model_lock = threading.Lock()
         self.orchestrator = MemoryOrchestrator()
 
         print(f"Loading model from {model_path}...")
@@ -44,7 +46,7 @@ class ChatSystem:
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
-        with torch.no_grad():
+        with self._model_lock, torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=150,
@@ -76,12 +78,12 @@ class ChatSystem:
         """Hot-reload LoRA adapters without restarting. Used after evolution."""
         path = adapter_path or config.evolved_checkpoint_dir
         if os.path.exists(os.path.join(path, "adapter_config.json")):
-            # Get the base model (unwrap PeftModel if already wrapped)
-            base = self.model
-            if hasattr(self.model, 'base_model'):
-                base = self.model.base_model.model
-            self.model = PeftModel.from_pretrained(base, path)
-            self.model.eval()
+            from model_loader import load_model_and_tokenizer
+            new_model, _ = load_model_and_tokenizer(use_lora=False)
+            new_model = PeftModel.from_pretrained(new_model, path)
+            new_model.eval()
+            with self._model_lock:
+                self.model = new_model
             print(f"Hot-reloaded adapters from {path}")
         else:
             print(f"No adapters found at {path}, keeping current model.")

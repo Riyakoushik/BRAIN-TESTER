@@ -35,7 +35,7 @@ def merge_lora(adapter_path):
     print("Merging LoRA weights into base model...")
     model = model.merge_and_unload()
 
-    merged_path = "./merged_model"
+    merged_path = config.merged_model_dir
     os.makedirs(merged_path, exist_ok=True)
     model.save_pretrained(merged_path)
     tokenizer.save_pretrained(merged_path)
