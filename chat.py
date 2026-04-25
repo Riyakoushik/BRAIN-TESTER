@@ -72,6 +72,20 @@ class ChatSystem:
         with open(config.preference_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(signal) + "\n")
 
+    def reload_adapters(self, adapter_path=None):
+        """Hot-reload LoRA adapters without restarting. Used after evolution."""
+        path = adapter_path or config.evolved_checkpoint_dir
+        if os.path.exists(os.path.join(path, "adapter_config.json")):
+            # Get the base model (unwrap PeftModel if already wrapped)
+            base = self.model
+            if hasattr(self.model, 'base_model'):
+                base = self.model.base_model.model
+            self.model = PeftModel.from_pretrained(base, path)
+            self.model.eval()
+            print(f"Hot-reloaded adapters from {path}")
+        else:
+            print(f"No adapters found at {path}, keeping current model.")
+
     def run_chat(self):
         print("--- Living Memory AI Started ---")
         print("Type 'exit' to quit, 'learn' to enter interactive learning mode.")

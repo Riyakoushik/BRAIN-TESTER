@@ -43,4 +43,18 @@ class Config:
         r"`.*?`"           # Inline code
     ])
 
+    # Server Configuration
+    server_host: str = "0.0.0.0"
+    server_port: int = 8000
+
+    # Scheduler Configuration
+    evolve_interval_hours: float = 24.0
+    auto_export_gguf: bool = False
+
+    # Export Configuration
+    merged_model_dir: str = "./merged_model"
+    export_dir: str = "./exports"
+    gguf_quantization: str = "Q4_K_M"
+    llama_cpp_path: str = "./llama.cpp"
+
 config = Config()

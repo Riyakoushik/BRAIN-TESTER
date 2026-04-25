@@ -8,3 +8,5 @@ tqdm
 numpy
 accelerate
 scikit-learn
+fastapi
+uvicorn[standard]
