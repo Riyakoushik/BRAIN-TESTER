@@ -1,44 +1,50 @@
 # Living Memory AI
 
-A complete, self-evolving personal AI system designed to run on a Google Colab T4 GPU.
+A self-evolving personal AI that runs **100% locally** on your machine. All memories are trained directly into the model weights — no external database, no cloud, no data leaves your system.
 
 ## Core Philosophy
-This system is built to be a companion with persistent, "lossless" memory. It is trained exclusively on human conversational data and is strictly forbidden from generating or being trained on programming code.
+This system is built to be a companion with persistent memory baked into the model itself. Every conversation gets fine-tuned into the weights, so the model file IS your memory. Copy the model to any device and all memories come with it.
 
 ## Architecture
-The system consists of three interconnected loops:
-1.  **Core Engine (Brain Stem):** A 1B-parameter Transformer model (`allenai/DataDecide-dolma1_7-no-math-code-1B`) fine-tuned via LoRA.
-2.  **Infinite Memory (Hippocampus):** A persistent vector database (ChromaDB) that stores and retrieves past interactions and facts, injecting them into the model's context.
-3.  **Self-Evolution (Plasticity):** A mechanism (`evolve.py`) that periodically fine-tunes the model on its own memories and user-selected preferred responses.
+1. **Core Engine (Brain Stem):** A 1B-parameter Transformer model (`allenai/DataDecide-dolma1_7-no-math-code-1B`) fine-tuned via LoRA.
+2. **In-Model Memory:** Conversations are stored as JSONL, then periodically trained into the model weights via `evolve.py`. The model itself becomes the memory.
+3. **Self-Evolution (Plasticity):** Running `evolve.py` fine-tunes the model on all your interactions, permanently embedding them into the weights.
+
+## Hardware Requirements
+- **Minimum:** 3GB VRAM GPU + 8GB RAM (or CPU-only with 12GB+ RAM)
+- **Recommended:** 4GB+ VRAM GPU + 12GB RAM
+- Works on: Windows, Linux, macOS (with compatible GPU or CPU fallback)
 
 ## File Structure
 - `config.py`: Centralized configuration and hyperparameters.
 - `data_prep.py`: Cleans raw chat logs and enforces the "no-code" policy.
 - `model_loader.py`: Handles model loading, 4-bit quantization, and LoRA application.
 - `train.py`: Initial fine-tuning script.
-- `memory_store.py`: Interface for ChromaDB.
-- `memory_utils.py`: High-level memory management and context retrieval.
+- `memory_store.py`: JSONL-based interaction storage.
+- `memory_utils.py`: Interaction orchestration.
 - `chat.py`: Interactive chat interface with "Interactive Learning Mode".
-- `evolve.py`: The self-evolution loop for continuous learning.
+- `evolve.py`: Self-evolution — trains all interactions into model weights.
 - `server.py`: FastAPI HTTP API server for always-on usage.
 - `scheduler.py`: Automatic self-evolution scheduling with hot-reload.
 - `export_gguf.py`: GGUF model export for phone/PC deployment.
-- `sync_memory.py`: Memory export/import for device sync.
+- `sync_memory.py`: Interaction export/import for backup.
 - `Modelfile`: Ollama deployment configuration.
 
 ## Setup and Usage
 
 ### Prerequisites
 - Python 3.8+
-- CUDA-compatible GPU (Optimized for T4)
+- GPU with 3GB+ VRAM (optional — CPU works too, just slower)
 
 ### Installation
 ```bash
 pip install -r requirements.txt
 ```
 
+**Note:** The base model (~2GB) downloads on first run. After that, everything is fully offline.
+
 ### 1. Data Preparation
-Place your raw chat logs in `my_chats.txt` (or use the generated synthetic data) and run:
+Place your raw chat logs in `my_chats.txt` and run:
 ```bash
 python data_prep.py
 ```
@@ -54,16 +60,19 @@ Start the chat system:
 ```bash
 python chat.py
 ```
-- Type 'learn' to enter **Interactive Learning Mode**, where you can pick the best out of multiple AI responses.
+- Every conversation is automatically saved to `interactions.jsonl`
+- Type `learn` to enter **Interactive Learning Mode** — pick the best out of 3 responses
+- Type `exit` to quit
 
-### 4. Self-Evolution
-Periodically run the evolution script to allow the model to permanently learn from its experiences:
+### 4. Self-Evolution (Daily Training)
+Train all your conversations into the model weights:
 ```bash
 python evolve.py
 ```
+Run this daily (or whenever you want the model to absorb new interactions). After evolution, the model permanently remembers everything you've discussed.
 
 ### 5. API Server (Always-On Mode)
-Run the model as an HTTP API server instead of CLI:
+Run the model as an HTTP API server:
 ```bash
 python server.py
 ```
@@ -73,7 +82,7 @@ Endpoints:
 - `POST /learn` — Get 3 candidate responses
 - `POST /learn/select` — Pick the best response `{"message": "...", "choice": 1}`
 - `POST /evolve` — Trigger evolution (runs in background, hot-reloads when done)
-- `GET /memories` — View all stored memories
+- `GET /stats` — View interaction count
 - `GET /health` — Health check
 
 ### 6. Auto-Evolution Scheduler
@@ -84,7 +93,7 @@ python scheduler.py --interval-hours 12 --auto-export-gguf
 ```
 
 ### 7. Export to GGUF (for Phone & PC)
-Convert your trained model to GGUF format for use with Ollama, LM Studio, or phone apps:
+Convert your trained model (with all memories baked in) to GGUF format:
 
 **Prerequisites:**
 ```bash
@@ -111,29 +120,32 @@ Copy `exports/brain-tester-Q4_K_M.gguf` (~600MB) to your phone and open with:
 - Android: [llama.cpp Android](https://github.com/ggerganov/llama.cpp/tree/master/examples/llama.android) or MLC Chat
 - iOS: MLC Chat or LLM Farm
 
-### 8. Memory Sync
-Export memories to transfer between devices or back up:
+### 8. Backup & Restore Interactions
+Export your interaction history (for backup or transfer):
 ```bash
-python sync_memory.py export --output my_memories.json
-python sync_memory.py import --input my_memories.json
+python sync_memory.py export --output my_backup.json
+python sync_memory.py import --input my_backup.json
 ```
 
-## Architecture (Full)
+## How Memory Works
 
 ```
-Phone/PC (GGUF via Ollama)  <──sync──>  Server (GPU, Colab/cloud)
-        │                                      │
-        └── offline inference ──────── evolve.py (auto-scheduled)
-                                               │
-                                        export_gguf.py
-                                               │
-                                        new GGUF pushed to device
+Chat (interactions.jsonl) ──> evolve.py ──> Model Weights (permanent memory)
+                                                │
+                                          export_gguf.py
+                                                │
+                                          GGUF file (portable, runs anywhere)
 ```
 
-The inference runs locally on your device (fast, offline). Learning/evolution happens on the GPU server. Periodically sync the updated GGUF back to your device.
+1. You chat → interactions saved to `interactions.jsonl`
+2. You run `evolve.py` → interactions trained into model weights
+3. The model now **permanently remembers** those conversations
+4. Export to GGUF → all memories travel with the model file
+
+**No database. No cloud. No external dependencies. The model IS the memory.**
 
 ## No-Code Policy
 This system implements multiple layers of code filtering:
 - **Pre-training:** Uses a base model trained without code data.
 - **Data Prep:** Automatically strips code blocks and technical keywords from training data.
-- **Inference:** Prepends a "no-code" system prompt and applies a post-generation filter to remove accidental code output.
+- **Inference:** Prepends a "no-code" system prompt and applies a post-generation filter.

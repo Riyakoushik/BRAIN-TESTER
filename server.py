@@ -53,9 +53,9 @@ class LearnSelectResponse(BaseModel):
 class EvolveResponse(BaseModel):
     status: str
 
-class MemoryResponse(BaseModel):
-    memories: List[str]
-    count: int
+class StatsResponse(BaseModel):
+    interactions: int
+    model_loaded: bool
 
 
 # --- Endpoints ---
@@ -73,7 +73,7 @@ def chat(req: ChatRequest):
     responses = chat_system.generate_response(req.message)
     ai_msg = responses[0]
 
-    # Save to memory
+    # Save interaction for future training
     chat_system.orchestrator.store_interaction(req.message, ai_msg)
 
     return ChatResponse(response=ai_msg)
@@ -140,15 +140,13 @@ def trigger_evolve():
     return EvolveResponse(status="Evolution started in background. Adapters will hot-reload when done.")
 
 
-@app.get("/memories", response_model=MemoryResponse)
-def get_memories():
-    """Retrieve all stored memories."""
+@app.get("/stats", response_model=StatsResponse)
+def get_stats():
+    """Get interaction count and model status."""
     if not chat_system:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
-    store = chat_system.orchestrator.store
-    all_mems = store.collection.get()
-    docs = all_mems.get("documents", [])
-    return MemoryResponse(memories=docs, count=len(docs))
+    count = chat_system.orchestrator.get_interaction_count()
+    return StatsResponse(interactions=count, model_loaded=True)
 
 
 if __name__ == "__main__":

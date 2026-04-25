@@ -10,27 +10,35 @@ def load_model_and_tokenizer(model_name=config.model_name, use_lora=True):
 
     print(f"Loading model {model_name}...")
 
-    # Check for GPU
-    device_map = "auto" if torch.cuda.is_available() else None
+    has_gpu = torch.cuda.is_available()
+    device_map = "auto" if has_gpu else None
 
-    # Quantization config for T4 (4-bit)
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-    )
+    # 4-bit quantization for GPU (fits 1B model in ~1.5GB VRAM)
+    bnb_config = None
+    if has_gpu:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16
+        )
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        quantization_config=bnb_config if torch.cuda.is_available() else None,
+        quantization_config=bnb_config,
         device_map=device_map,
+        torch_dtype=torch.float32 if not has_gpu else None,
         trust_remote_code=True
     )
 
     if use_lora:
         print("Applying LoRA...")
-        model = prepare_model_for_kbit_training(model)
+        if has_gpu:
+            model = prepare_model_for_kbit_training(model)
+
+        if config.gradient_checkpointing:
+            model.gradient_checkpointing_enable()
+
         lora_config = LoraConfig(
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
@@ -45,6 +53,4 @@ def load_model_and_tokenizer(model_name=config.model_name, use_lora=True):
     return model, tokenizer
 
 if __name__ == "__main__":
-    # Test loading (might be slow/resource intensive in this environment)
-    # model, tokenizer = load_model_and_tokenizer()
     pass

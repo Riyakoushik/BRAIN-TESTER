@@ -6,13 +6,14 @@ class Config:
     # Model Configuration
     model_name: str = "allenai/DataDecide-dolma1_7-no-math-code-1B"
 
-    # Training Configuration
-    batch_size: int = 4
+    # Training Configuration (optimized for 3GB VRAM)
+    batch_size: int = 1
     learning_rate: float = 2e-4
     num_epochs: int = 3
-    max_length: int = 512
-    gradient_accumulation_steps: int = 4
+    max_length: int = 256
+    gradient_accumulation_steps: int = 8
     fp16: bool = True
+    gradient_checkpointing: bool = True
 
     # LoRA Configuration
     lora_r: int = 8
@@ -20,16 +21,12 @@ class Config:
     lora_dropout: float = 0.05
     target_modules: List[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
 
-    # Memory Configuration
-    chroma_db_path: str = "./memory_db"
-    embedding_model: str = "all-MiniLM-L6-v2"
-    top_k_memories: int = 3
-
     # Data Paths
     raw_data_path: str = "my_chats.txt"
     processed_data_path: str = "processed_chats.txt"
     checkpoint_dir: str = "./checkpoints"
     evolved_checkpoint_dir: str = "./evolved_checkpoints"
+    interactions_file: str = "interactions.jsonl"
     preference_file: str = "training_signals.jsonl"
 
     # No-Code Filter

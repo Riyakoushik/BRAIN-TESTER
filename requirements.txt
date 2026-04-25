@@ -2,8 +2,6 @@ torch
 transformers
 peft
 bitsandbytes
-chromadb
-sentence-transformers
 tqdm
 numpy
 accelerate

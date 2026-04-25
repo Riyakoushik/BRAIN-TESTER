@@ -1,0 +1,30 @@
+# Model artifacts
+checkpoints/
+evolved_checkpoints/
+merged_model/
+exports/
+*.gguf
+
+# Data files
+interactions.jsonl
+training_signals.jsonl
+evolution_data.txt
+memories_export.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# llama.cpp build
+llama.cpp/

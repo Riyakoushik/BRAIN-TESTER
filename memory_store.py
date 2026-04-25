@@ -1,43 +1,50 @@
-import chromadb
-from chromadb.utils import embedding_functions
-from config import config
+"""
+memory_store.py — JSONL-based interaction storage.
+
+All memories are stored as JSONL lines and get trained into the model
+during evolution. No external database needed.
+"""
+import json
 import os
+from config import config
+
 
 class MemoryStore:
-    def __init__(self, db_path=config.chroma_db_path):
-        if not os.path.exists(db_path):
-            os.makedirs(db_path)
-
-        self.client = chromadb.PersistentClient(path=db_path)
-        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=config.embedding_model
-        )
-
-        self.collection = self.client.get_or_create_collection(
-            name="personal_memories",
-            embedding_function=self.embedding_fn
-        )
+    def __init__(self, file_path=config.interactions_file):
+        self.file_path = file_path
 
     def add_memory(self, text, metadata=None):
-        # Generate a simple ID based on current collection size
-        mem_id = f"mem_{self.collection.count()}"
-        self.collection.add(
-            documents=[text],
-            metadatas=[metadata] if metadata else [{"type": "conversation"}],
-            ids=[mem_id]
-        )
-        print(f"Added memory: {text[:50]}...")
+        entry = {
+            "text": text,
+            "metadata": metadata or {"type": "conversation"}
+        }
+        with open(self.file_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    def query_memories(self, query_text, n_results=config.top_k_memories):
-        results = self.collection.query(
-            query_texts=[query_text],
-            n_results=n_results
-        )
-        return results['documents'][0] if results['documents'] else []
+    def get_all_memories(self):
+        if not os.path.exists(self.file_path):
+            return []
+        memories = []
+        with open(self.file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    memories.append(json.loads(line))
+        return memories
+
+    def count(self):
+        if not os.path.exists(self.file_path):
+            return 0
+        count = 0
+        with open(self.file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    count += 1
+        return count
+
 
 if __name__ == "__main__":
-    # Quick test
-    store = MemoryStore(db_path="./test_memory_db")
+    store = MemoryStore(file_path="./test_memories.jsonl")
     store.add_memory("I love walking in the park during autumn.")
-    mems = store.query_memories("What do I like to do in autumn?")
-    print(f"Retrieved: {mems}")
+    print(f"Stored {store.count()} memories")
+    print(f"All: {store.get_all_memories()}")

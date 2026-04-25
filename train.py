@@ -7,6 +7,7 @@ from config import config
 
 def train():
     model, tokenizer = load_model_and_tokenizer()
+    has_gpu = torch.cuda.is_available()
 
     dataset = ChatDataset(config.processed_data_path, tokenizer)
 
@@ -16,12 +17,13 @@ def train():
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         learning_rate=config.learning_rate,
-        fp16=config.fp16,
+        fp16=has_gpu and config.fp16,
         logging_steps=10,
         save_strategy="epoch",
         evaluation_strategy="no",
-        report_to="none", # Disable wandb/etc for simplicity
-        remove_unused_columns=False
+        report_to="none",
+        remove_unused_columns=False,
+        dataloader_pin_memory=False,
     )
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -41,8 +43,6 @@ def train():
     tokenizer.save_pretrained(config.checkpoint_dir)
 
 if __name__ == "__main__":
-    # Check if we should process data first
-    import os
     if not os.path.exists(config.processed_data_path):
         from data_prep import process_data
         process_data(config.raw_data_path, config.processed_data_path)

@@ -14,11 +14,14 @@ class ChatSystem:
         self.orchestrator = MemoryOrchestrator()
 
         print(f"Loading model from {model_path}...")
-        # Load base model (in 4-bit if GPU available)
         from model_loader import load_model_and_tokenizer
         self.model, self.tokenizer = load_model_and_tokenizer(use_lora=False)
 
-        if os.path.exists(os.path.join(model_path, "adapter_config.json")):
+        # Load best available adapters
+        if os.path.exists(os.path.join(config.evolved_checkpoint_dir, "adapter_config.json")):
+            print("Loading evolved LoRA adapters...")
+            self.model = PeftModel.from_pretrained(self.model, config.evolved_checkpoint_dir)
+        elif os.path.exists(os.path.join(model_path, "adapter_config.json")):
             print("Loading LoRA adapters...")
             self.model = PeftModel.from_pretrained(self.model, model_path)
 
@@ -26,23 +29,19 @@ class ChatSystem:
             "You are a helpful, human-like AI assistant. "
             "You must NEVER output any programming code, markdown code blocks, or technical scripts. "
             "Your goal is to be a companion with persistent memory. "
-            "Use the provided context from previous interactions to stay consistent.\n"
+            "Be warm, thoughtful, and conversational.\n"
         )
 
     def filter_output(self, text):
-        # Remove markdown code blocks
         text = re.sub(r"```[\s\S]*?```", "", text)
-        # Remove inline code
         text = re.sub(r"`.*?`", "", text)
-        # Remove common code keywords if they appear in a technical context
         for keyword in config.forbidden_keywords:
             if keyword in text:
                 text = text.replace(keyword, "[REMOVED]")
         return text
 
     def generate_response(self, user_input, num_return_sequences=1):
-        context = self.orchestrator.get_context(user_input)
-        prompt = f"{self.system_prompt}\n{context}\nUser: {user_input}\nAI:"
+        prompt = f"{self.system_prompt}\nUser: {user_input}\nAI:"
 
         with self._model_lock, torch.no_grad():
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
@@ -59,7 +58,6 @@ class ChatSystem:
         responses = []
         for output in outputs:
             full_text = self.tokenizer.decode(output, skip_special_tokens=True)
-            # Extract only the AI's part
             ai_part = full_text.split("AI:")[-1].strip()
             responses.append(self.filter_output(ai_part))
 
@@ -90,6 +88,7 @@ class ChatSystem:
     def run_chat(self):
         print("--- Living Memory AI Started ---")
         print("Type 'exit' to quit, 'learn' to enter interactive learning mode.")
+        print(f"Interactions stored: {self.orchestrator.get_interaction_count()}")
 
         while True:
             user_input = input("\nYou: ")
@@ -108,17 +107,16 @@ class ChatSystem:
                     best_res = responses[int(choice)-1]
                     self.save_preference(user_msg, best_res)
                     self.orchestrator.store_interaction(user_msg, best_res, high_priority=True)
-                    print("Preference saved!")
+                    print("Preference saved! Will be trained into model on next evolution.")
                 continue
 
             responses = self.generate_response(user_input)
             ai_msg = responses[0]
             print(f"AI: {ai_msg}")
 
-            # Save to memory
+            # Save interaction for future training
             self.orchestrator.store_interaction(user_input, ai_msg)
 
 if __name__ == "__main__":
-    # Note: This requires the model to be trained/available.
     chat = ChatSystem()
     chat.run_chat()

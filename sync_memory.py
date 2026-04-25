@@ -1,10 +1,10 @@
 """
-sync_memory.py — Export and import memories as portable JSON.
+sync_memory.py — Export and import interactions as portable JSON.
 
 Usage:
   python sync_memory.py export                     # export to memories_export.json
   python sync_memory.py export --output backup.json
-  python sync_memory.py import --input backup.json  # import into ChromaDB
+  python sync_memory.py import --input backup.json  # import interactions
 """
 import argparse
 import json
@@ -14,31 +14,19 @@ from config import config
 
 
 def export_memories(output_path="memories_export.json"):
-    """Export all ChromaDB memories to a JSON file."""
+    """Export all interactions to a JSON file."""
     store = MemoryStore()
-    all_data = store.collection.get(include=["documents", "metadatas"])
-
-    memories = []
-    docs = all_data.get("documents", [])
-    metas = all_data.get("metadatas", [])
-    ids = all_data.get("ids", [])
-
-    for i in range(len(docs)):
-        memories.append({
-            "id": ids[i] if i < len(ids) else f"mem_{i}",
-            "text": docs[i],
-            "metadata": metas[i] if i < len(metas) else {}
-        })
+    memories = store.get_all_memories()
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({"memories": memories, "count": len(memories)}, f, indent=2, ensure_ascii=False)
 
-    print(f"Exported {len(memories)} memories to {output_path}")
+    print(f"Exported {len(memories)} interactions to {output_path}")
     return output_path
 
 
 def import_memories(input_path="memories_export.json"):
-    """Import memories from a JSON file into ChromaDB."""
+    """Import interactions from a JSON file."""
     if not os.path.exists(input_path):
         print(f"ERROR: {input_path} not found.")
         return
@@ -56,12 +44,12 @@ def import_memories(input_path="memories_export.json"):
             store.add_memory(text, metadata=metadata)
             imported += 1
 
-    print(f"Imported {imported} memories from {input_path}")
+    print(f"Imported {imported} interactions from {input_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Memory sync tool")
-    parser.add_argument("action", choices=["export", "import"], help="Export or import memories")
+    parser.add_argument("action", choices=["export", "import"], help="Export or import interactions")
     parser.add_argument("--output", default="memories_export.json", help="Output file for export")
     parser.add_argument("--input", default="memories_export.json", help="Input file for import")
     args = parser.parse_args()
