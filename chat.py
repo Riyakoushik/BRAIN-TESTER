@@ -44,9 +44,8 @@ class ChatSystem:
         context = self.orchestrator.get_context(user_input)
         prompt = f"{self.system_prompt}\n{context}\nUser: {user_input}\nAI:"
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-
         with self._model_lock, torch.no_grad():
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=150,
