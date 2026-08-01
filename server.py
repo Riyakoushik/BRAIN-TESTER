@@ -8,7 +8,8 @@ Run with:
 import os
 import time
 import threading
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List
 from chat import ChatSystem
@@ -22,6 +23,22 @@ app = FastAPI(title="Living Memory AI", version="2.0")
 # Global state
 chat_system: Optional[ChatSystem] = None
 _learn_cache: dict = {}  # cache learn responses: {message: (timestamp, responses)}
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(api_key: str = Security(API_KEY_HEADER)):
+    expected_key = config.api_key
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key missing"
+        )
+    if api_key != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API Key"
+        )
+    return api_key
 
 
 @app.on_event("startup")
@@ -65,7 +82,7 @@ def health():
     return {"status": "ok", "model_loaded": chat_system is not None}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
 def chat(req: ChatRequest):
     if not chat_system:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
@@ -79,7 +96,7 @@ def chat(req: ChatRequest):
     return ChatResponse(response=ai_msg)
 
 
-@app.post("/learn", response_model=LearnResponse)
+@app.post("/learn", response_model=LearnResponse, dependencies=[Depends(verify_api_key)])
 def learn(req: ChatRequest):
     if not chat_system:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
@@ -98,7 +115,7 @@ def learn(req: ChatRequest):
     return LearnResponse(options=responses)
 
 
-@app.post("/learn/select", response_model=LearnSelectResponse)
+@app.post("/learn/select", response_model=LearnSelectResponse, dependencies=[Depends(verify_api_key)])
 def learn_select(req: LearnSelectRequest):
     if not chat_system:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
@@ -122,7 +139,7 @@ def learn_select(req: LearnSelectRequest):
     return LearnSelectResponse(saved=best)
 
 
-@app.post("/evolve", response_model=EvolveResponse)
+@app.post("/evolve", response_model=EvolveResponse, dependencies=[Depends(verify_api_key)])
 def trigger_evolve():
     """Trigger self-evolution. This runs training in a background thread."""
     if not chat_system:
@@ -140,7 +157,7 @@ def trigger_evolve():
     return EvolveResponse(status="Evolution started in background. Adapters will hot-reload when done.")
 
 
-@app.get("/stats", response_model=StatsResponse)
+@app.get("/stats", response_model=StatsResponse, dependencies=[Depends(verify_api_key)])
 def get_stats():
     """Get interaction count and model status."""
     if not chat_system:

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import List
 
@@ -43,6 +44,7 @@ class Config:
     # Server Configuration
     server_host: str = "0.0.0.0"
     server_port: int = 8000
+    api_key: str = field(default_factory=lambda: os.environ.get("API_KEY", "living-memory-secret-key"))
 
     # Scheduler Configuration
     evolve_interval_hours: float = 24.0
